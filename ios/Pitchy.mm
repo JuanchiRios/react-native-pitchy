@@ -22,19 +22,23 @@ RCT_EXPORT_METHOD(init:(NSDictionary *)config) {
         return;
     #endif
     if (!isInitialized) {
-        audioEngine = [[AVAudioEngine alloc] init];
-        AVAudioInputNode *inputNode = [audioEngine inputNode];
-        
-        AVAudioFormat *format = [inputNode inputFormatForBus:0];
-        sampleRate = format.sampleRate;
-        minVolume = [config[@"minVolume"] doubleValue];
-
-        [inputNode installTapOnBus:0 bufferSize:[config[@"bufferSize"] unsignedIntValue] format:format block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
-            [self detectPitch:buffer];
-        }];
-
+        // Configure audio session first
         AVAudioSession *session = [AVAudioSession sharedInstance];
         NSError *error = nil;
+        
+
+        // Set preferred sample rate and I/O buffer duration
+        [session setPreferredSampleRate:44100 error:&error];
+        if (error) {
+            RCTLogError(@"Error setting preferred sample rate: %@", error);
+        }
+        
+        [session setPreferredIOBufferDuration:0.005 error:&error];
+        if (error) {
+            RCTLogError(@"Error setting preferred I/O buffer duration: %@", error);
+        }
+        
+        // Configure audio session category and mode
         [session setCategory:AVAudioSessionCategoryPlayAndRecord
                         mode:AVAudioSessionModeMeasurement
                      options:AVAudioSessionCategoryOptionDefaultToSpeaker
@@ -43,10 +47,33 @@ RCT_EXPORT_METHOD(init:(NSDictionary *)config) {
             RCTLogError(@"Error setting AVAudioSession category: %@", error);
         }
         
+        // Activate the session
         [session setActive:YES error:&error];
         if (error) {
             RCTLogError(@"Error activating AVAudioSession: %@", error);
         }
+
+        // Initialize audio engine after session configuration
+        audioEngine = [[AVAudioEngine alloc] init];
+        AVAudioInputNode *inputNode = [audioEngine inputNode];
+        
+        // Get the actual format after session configuration
+        AVAudioFormat *format = [inputNode inputFormatForBus:0];
+        if (format.sampleRate == 0) {
+            RCTLogError(@"Invalid sample rate: %f", format.sampleRate);
+            return;
+        }
+        
+        sampleRate = format.sampleRate;
+        minVolume = [config[@"minVolume"] doubleValue];
+        
+        // Install tap with the configured format
+        [inputNode installTapOnBus:0 
+                       bufferSize:[config[@"bufferSize"] unsignedIntValue] 
+                           format:format 
+                            block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
+            [self detectPitch:buffer];
+        }];
 
         isInitialized = YES;
     }
