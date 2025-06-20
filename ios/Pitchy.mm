@@ -92,6 +92,7 @@ RCT_EXPORT_METHOD(init:(NSDictionary *)initConfig) {
             [audioEngine stop];
         }
         [audioEngine reset];
+
     }
     
     // Initialize new audio engine
